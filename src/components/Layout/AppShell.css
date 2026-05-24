@@ -1,0 +1,187 @@
+/* Responsive Outer Layout Frame */
+
+.app-shell-container {
+  width: 100vw;
+  height: 100vh;
+  min-height: -webkit-fill-available; /* Avoid tall toolbar issues in mobile Safari/Chrome */
+  position: relative;
+  background: radial-gradient(circle at 10% 20%, #eff3f8 0%, #e2e8f0 90%);
+  overflow: hidden;
+}
+
+.dark .app-shell-container {
+  background: radial-gradient(circle at 10% 20%, #0f141c 0%, #080b0f 90%);
+}
+
+/* Ambient glow details behind simulator on desktop */
+.desktop-ambient-glow {
+  position: absolute;
+  width: 500px;
+  height: 500px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(79, 70, 229, 0.05) 0%, rgba(79, 70, 229, 0) 70%);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Mobile Simulator wrapper on Desktop */
+.app-shell {
+  width: 430px;
+  height: 88vh;
+  max-height: 860px;
+  min-height: 640px;
+  background-color: var(--bg-app);
+  border-radius: 36px;
+  box-shadow: 
+    0 24px 60px -15px rgba(0, 0, 0, 0.12),
+    0 12px 24px -10px rgba(0, 0, 0, 0.08),
+    0 0 0 1px rgba(0, 0, 0, 0.05);
+  border: 10px solid #1e2229; /* Sleek hardware-like matte bezel */
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+  transition: border var(--transition-normal);
+}
+
+.dark .app-shell {
+  border-color: #21262d;
+  box-shadow: 
+    0 24px 60px -15px rgba(0, 0, 0, 0.4),
+    0 12px 24px -10px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.app-screen {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  background-color: var(--bg-app);
+}
+
+.main-layout-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+.app-content-area {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  -webkit-overflow-scrolling: touch; /* Smooth inertia scroll on iOS */
+}
+
+/* Scanning Overlay Layer */
+.overlay-view-wrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 100;
+  animation: slide-up var(--transition-normal) forwards;
+  background-color: #000000;
+}
+
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* Full Screen Native Responsive Adaptability */
+@media (max-width: 480px) {
+  .app-shell-container {
+    background: none;
+  }
+  
+  .desktop-ambient-glow {
+    display: none;
+  }
+  
+  .app-shell {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    min-height: 100%;
+    border-radius: 0;
+    border: none;
+  }
+}
+
+/* Floating Slide-up Toast UI System */
+.app-toast {
+  position: absolute;
+  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(17, 24, 39, 0.95);
+  color: #ffffff;
+  padding: 10px 18px;
+  border-radius: var(--radius-full);
+  box-shadow: 
+    0 10px 25px -5px rgba(0, 0, 0, 0.3),
+    0 8px 16px -6px rgba(0, 0, 0, 0.2);
+  gap: var(--spacing-sm);
+  z-index: 150;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  width: max-content;
+  max-width: 90%;
+  pointer-events: none; /* Prevents blocking taps underneath during fade-out */
+}
+
+.toast-icon-circle {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-success);
+  color: #ffffff;
+}
+
+.toast-message-text {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+/* Dynamic slide-up entry and delayed fade-out keyframes */
+.animate-toast {
+  animation: toast-entrance 3.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes toast-entrance {
+  0% {
+    bottom: calc(40px + env(safe-area-inset-bottom, 0px));
+    opacity: 0;
+    transform: translate(-50%, 20px) scale(0.9);
+  }
+  8% {
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  90% {
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  100% {
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    opacity: 0;
+    transform: translate(-50%, -10px) scale(0.95);
+  }
+}
+

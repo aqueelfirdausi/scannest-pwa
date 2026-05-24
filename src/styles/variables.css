@@ -1,0 +1,69 @@
+/* CSS Design Tokens for ScanNest - A Calm Mobile Utility */
+
+:root {
+  /* Colors */
+  --bg-app: #f7f9fc;
+  --bg-card: #ffffff;
+  --bg-card-secondary: #f0f4f8;
+  
+  --text-primary: #111827;     /* Deep charcoal */
+  --text-secondary: #4b5563;   /* Slate/grey for calm subtexts */
+  --text-muted: #9ca3af;       /* Unobtrusive labels */
+  --text-inverse: #ffffff;
+  
+  --color-primary: #4f46e5;    /* Calm Premium Indigo */
+  --color-primary-hover: #4338ca;
+  --color-primary-light: #eef2ff;
+  
+  --color-success: #10b981;    /* Serene Emerald */
+  --color-success-light: #ecfdf5;
+  --color-warning: #f59e0b;    /* Warm Amber */
+  --color-danger: #ef4444;     /* Soft Rose */
+  --color-danger-light: #fef2f2;
+  
+  --border-light: rgba(0, 0, 0, 0.05);
+  
+  /* Typography */
+  --font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  
+  /* Dimensions & Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-full: 9999px;
+  
+  /* Shadows & Depth */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.03), 0 1px 2px rgba(0, 0, 0, 0.02);
+  --shadow-md: 0 4px 18px rgba(0, 0, 0, 0.025), 0 2px 6px rgba(0, 0, 0, 0.02);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.03);
+  
+  /* Transitions */
+  --transition-fast: 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-normal: 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-spring: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-app: #0d1117;
+    --bg-card: #161b22;
+    --bg-card-secondary: #21262d;
+    
+    --text-primary: #f0f6fc;
+    --text-secondary: #8b949e;
+    --text-muted: #484f58;
+    
+    --color-primary: #58a6ff;
+    --color-primary-hover: #1f6feb;
+    --color-primary-light: rgba(56, 139, 253, 0.1);
+    
+    --border-light: rgba(240, 246, 252, 0.08);
+  }
+}

@@ -1,0 +1,416 @@
+.home-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-lg);
+  overflow-y: auto;
+  animation: fade-in var(--transition-normal);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Welcome Section */
+.welcome-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.welcome-subtitle {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-primary);
+}
+
+.welcome-title {
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+}
+
+.welcome-description {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* Action Cards */
+.actions-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.action-card {
+  position: relative;
+  width: 100%;
+  border-radius: var(--radius-lg);
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-md);
+  text-align: left;
+  overflow: hidden;
+  transition: all var(--transition-normal);
+}
+
+.action-card.primary {
+  border-color: rgba(79, 70, 229, 0.15);
+}
+
+.card-accent-gradient {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 5px;
+  background: linear-gradient(90deg, var(--color-primary), #818cf8);
+}
+
+.card-content {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-lg);
+  gap: var(--spacing-md);
+  position: relative;
+  z-index: 1;
+}
+
+.card-icon-wrapper {
+  width: 52px;
+  height: 52px;
+  min-width: 52px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-primary-light);
+  color: var(--color-primary);
+  transition: all var(--transition-normal);
+}
+
+.action-card.secondary .card-icon-wrapper {
+  background-color: var(--bg-card-secondary);
+  color: var(--text-secondary);
+}
+
+.card-text-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.card-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.card-desc {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.card-arrow {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  background-color: var(--bg-app);
+  opacity: 0.7;
+  transition: all var(--transition-fast);
+}
+
+/* Card interactive states */
+.action-card:active {
+  transform: scale(0.975);
+}
+
+.action-card.primary:active {
+  background-color: var(--color-primary-light);
+}
+
+.action-card.secondary:active {
+  background-color: var(--bg-card-secondary);
+}
+
+@media (hover: hover) {
+  .action-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-lg);
+    border-color: rgba(79, 70, 229, 0.3);
+  }
+  
+  .action-card:hover .card-arrow {
+    background-color: var(--color-primary);
+    color: var(--text-inverse);
+    opacity: 1;
+    transform: translateX(3px);
+  }
+  
+  .action-card.primary:hover .card-icon-wrapper {
+    background-color: var(--color-primary);
+    color: var(--text-inverse);
+  }
+}
+
+/* Recent Activity Section */
+.recent-scans-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.section-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.section-action-link {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  opacity: 0.9;
+  transition: opacity var(--transition-fast);
+}
+
+.section-action-link:hover {
+  opacity: 1;
+}
+
+/* Empty Placeholder Card */
+.empty-placeholder-card {
+  width: 100%;
+  padding: var(--spacing-xl) var(--spacing-lg);
+  background-color: var(--bg-card);
+  border-radius: var(--radius-lg);
+  border: 1px dashed var(--border-light);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.placeholder-illustration {
+  width: 72px;
+  height: 72px;
+  position: relative;
+  margin-bottom: var(--spacing-md);
+}
+
+.pulse-ripple {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-full);
+  background-color: var(--color-primary-light);
+  animation: breathing-ripple 2.5s infinite ease-in-out;
+  z-index: 0;
+}
+
+.nest-icon-inner {
+  width: 54px;
+  height: 54px;
+  border-radius: var(--radius-full);
+  background-color: var(--bg-card-secondary);
+  color: var(--color-primary);
+  border: 1.5px solid var(--border-light);
+  z-index: 1;
+}
+
+@keyframes breathing-ripple {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(0.9);
+    opacity: 0.4;
+  }
+}
+
+.placeholder-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.placeholder-desc {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  max-width: 250px;
+  line-height: 1.4;
+}
+
+/* Home Real Recent Scans List UI */
+.home-recent-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.home-recent-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  justify-content: space-between;
+  width: 100%;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+}
+
+.home-recent-card:active {
+  transform: scale(0.985);
+  background-color: var(--bg-card-secondary);
+}
+
+@media (hover: hover) {
+  .home-recent-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: rgba(79, 70, 229, 0.25);
+  }
+  
+  .home-recent-card:hover .home-recent-arrow {
+    transform: translateX(3px);
+    color: var(--color-primary);
+  }
+}
+
+.home-recent-icon {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-primary-light);
+  color: var(--color-primary);
+  margin-right: var(--spacing-md);
+}
+
+.home-recent-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.recent-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+  margin-bottom: 2px;
+  text-align: left;
+}
+
+.recent-meta {
+  justify-content: flex-start;
+  gap: 4px;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+}
+
+.recent-meta-divider {
+  opacity: 0.5;
+}
+
+.home-recent-arrow {
+  color: var(--text-muted);
+  transition: transform var(--transition-fast), color var(--transition-fast);
+}
+
+.home-recent-loader {
+  animation: shimmer 1.6s infinite linear;
+}
+
+/* QR Code Specific Dashboard Card styling */
+.home-recent-card.qr-card-item .home-recent-icon {
+  background-color: rgba(6, 182, 212, 0.12); /* Calm premium cyan */
+  color: #06b6d4;
+}
+
+.home-recent-card.qr-card-item:active {
+  background-color: rgba(6, 182, 212, 0.04);
+}
+
+@media (hover: hover) {
+  .home-recent-card.qr-card-item:hover {
+    border-color: rgba(6, 182, 212, 0.35);
+  }
+  .home-recent-card.qr-card-item:hover .home-recent-arrow {
+    color: #06b6d4;
+  }
+}
+
+.recent-qr-value {
+  color: #06b6d4;
+  font-weight: 600;
+  max-width: 140px;
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Guarantee Info */
+.guarantee-section {
+  margin-top: var(--spacing-sm);
+  padding: var(--spacing-sm) 0;
+}
+
+.guarantee-grid {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--spacing-xs);
+}
+
+.guarantee-item {
+  flex: 1;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  gap: 6px;
+  justify-content: center;
+}
+
+.g-icon.green {
+  color: var(--color-success);
+}
+.g-icon.blue {
+  color: var(--color-primary);
+}
+.g-icon.purple {
+  color: #a855f7;
+}
