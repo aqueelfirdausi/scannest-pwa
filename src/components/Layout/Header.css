@@ -105,3 +105,26 @@
     opacity: 0;
   }
 }
+
+/* Defensive mobile viewport adjustments to prevent header clipping */
+@media (max-width: 375px) {
+  .brand-title {
+    font-size: 1.05rem;
+  }
+  .status-badge {
+    padding: 5px 8px;
+    gap: var(--spacing-xs);
+  }
+}
+
+@media (max-width: 340px) {
+  .brand-title {
+    font-size: 0.95rem;
+  }
+  .badge-text {
+    display: none; /* Hide 'Local-Only' text, show only shield check + pulse dot */
+  }
+  .status-badge {
+    padding: 5px 6px;
+  }
+}

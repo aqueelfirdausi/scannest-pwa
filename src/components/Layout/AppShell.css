@@ -101,7 +101,7 @@
 }
 
 /* Full Screen Native Responsive Adaptability */
-@media (max-width: 480px) {
+@media (max-width: 480px) or (max-height: 720px) {
   .app-shell-container {
     background: none;
   }
