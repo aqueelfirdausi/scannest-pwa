@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ScanNest</string>
+    <string name="title_activity_main">ScanNest</string>
+    <string name="package_name">io.novartsystems.scannest</string>
+    <string name="custom_url_scheme">io.novartsystems.scannest</string>
+</resources>
