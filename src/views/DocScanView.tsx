@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Zap, ZapOff, Image as ImageIcon, Check, Camera, RefreshCw, AlertTriangle, Loader2, Plus, Trash2, FileText, Download } from 'lucide-react';
+import { X, Zap, ZapOff, Image as ImageIcon, Check, Camera, RefreshCw, AlertTriangle, Loader2, Plus, Trash2, FileText, Download, RotateCcw, RotateCw } from 'lucide-react';
 import { useCamera } from '../hooks/useCamera';
 import { jsPDF } from 'jspdf';
 import { saveScan } from '../services/db';
@@ -63,6 +63,22 @@ export const DocScanView: React.FC<DocScanViewProps> = ({ onClose, onSaveSuccess
   const [pages, setPages] = useState<ScannedPage[]>([]);
   const [viewMode, setViewMode] = useState<ViewModeType>('camera');
   const [exporting, setExporting] = useState(false);
+  const [pdfTitle, setPdfTitle] = useState<string>('');
+
+  // Set default PDF filename when entering tray review
+  useEffect(() => {
+    if (viewMode === 'tray_review' && !pdfTitle) {
+      const dateOptions: Intl.DateTimeFormatOptions = { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      };
+      const dateStrTitle = new Date().toLocaleDateString('en-US', dateOptions);
+      setPdfTitle(`Study Scan — ${dateStrTitle}`);
+    }
+  }, [viewMode, pdfTitle]);
 
   // Wire camera stream to video element srcObject whenever stream changes
   useEffect(() => {
@@ -266,6 +282,87 @@ export const DocScanView: React.FC<DocScanViewProps> = ({ onClose, onSaveSuccess
     });
   };
 
+  // Rotate raw capture image via offscreen canvas translation & rotation
+  const rotateImage = (dataUrl: string, direction: 'left' | 'right'): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = dataUrl;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        // Swap dimensions for 90-degree rotations
+        canvas.width = img.height;
+        canvas.height = img.width;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(dataUrl);
+          return;
+        }
+
+        if (direction === 'right') {
+          ctx.translate(canvas.width, 0);
+          ctx.rotate(90 * Math.PI / 180);
+        } else {
+          ctx.translate(0, canvas.height);
+          ctx.rotate(-90 * Math.PI / 180);
+        }
+
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/jpeg', 0.9));
+      };
+      img.onerror = () => resolve(dataUrl);
+    });
+  };
+
+  const handleRotate = async (direction: 'left' | 'right') => {
+    if (capturedImage) {
+      try {
+        const rotated = await rotateImage(capturedImage, direction);
+        setCapturedImage(rotated);
+        // Reset crop settings since active picture dimensions have swapped
+        setCrop({
+          left: 0.05,
+          top: 0.05,
+          right: 0.95,
+          bottom: 0.95
+        });
+      } catch (err) {
+        console.error('Failed to rotate image:', err);
+      }
+    }
+  };
+
+  // Reorder pages in the multi-page session tray
+  const handleMovePage = (index: number, direction: 'earlier' | 'later') => {
+    if (direction === 'earlier' && index > 0) {
+      const nextPages = [...pages];
+      const temp = nextPages[index];
+      nextPages[index] = nextPages[index - 1];
+      nextPages[index - 1] = temp;
+      setPages(nextPages);
+    } else if (direction === 'later' && index < pages.length - 1) {
+      const nextPages = [...pages];
+      const temp = nextPages[index];
+      nextPages[index] = nextPages[index + 1];
+      nextPages[index + 1] = temp;
+      setPages(nextPages);
+    }
+  };
+
+  // Sanitize name for file-saving and PDF creation
+  const sanitizeFilename = (title: string): string => {
+    let clean = title.replace(/[\\/:*?"<>|]/g, '');
+    clean = clean.trim();
+    if (!clean) {
+      const dateStr = new Date().toISOString().split('T')[0];
+      clean = `scannest-study-scan-${dateStr}`;
+    }
+    if (!clean.toLowerCase().endsWith('.pdf')) {
+      clean += '.pdf';
+    }
+    return clean;
+  };
+
   // Capture current video frame and switch to single-page review/preview
   const handleCapture = () => {
     if (!videoRef.current) return;
@@ -418,20 +515,9 @@ export const DocScanView: React.FC<DocScanViewProps> = ({ onClose, onSaveSuccess
         pdf.addImage(bakedDataUrl, 'JPEG', xOffset, yOffset, drawWidth, drawHeight, undefined, 'FAST');
       }
 
-      // Generate study-scan filename
-      const dateStr = new Date().toISOString().split('T')[0];
-      const filename = `scannest-study-scan-${dateStr}.pdf`;
-
-      // Generate dynamic local scan title for student record index
-      const dateOptions: Intl.DateTimeFormatOptions = { 
-        year: 'numeric', 
-        month: 'short', 
-        day: 'numeric', 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      };
-      const dateStrTitle = new Date().toLocaleDateString('en-US', dateOptions);
-      const defaultTitle = `Study Scan — ${dateStrTitle}`;
+      // Generate study-scan filename and title dynamically
+      const cleanFilename = sanitizeFilename(pdfTitle);
+      const cleanTitle = pdfTitle.trim() || 'Study Scan';
 
       // Extract compiled PDF content as a raw binary Blob object
       const pdfBlob = pdf.output('blob');
@@ -439,17 +525,17 @@ export const DocScanView: React.FC<DocScanViewProps> = ({ onClose, onSaveSuccess
       // Write record to local browser IndexedDB transaction safely
       await saveScan({
         id: Date.now().toString(),
-        title: defaultTitle,
+        title: cleanTitle,
         createdAt: Date.now(),
         pageCount: pages.length,
         sizeBytes: pdfBlob.size,
-        fileName: filename,
+        fileName: cleanFilename,
         pdfBlob: pdfBlob,
         type: 'document'
       });
 
       // Trigger instant local browser sandbox download
-      pdf.save(filename);
+      pdf.save(cleanFilename);
 
       // Reset tray items and return to dashboard
       setPages([]);
@@ -648,6 +734,28 @@ export const DocScanView: React.FC<DocScanViewProps> = ({ onClose, onSaveSuccess
           </div>
 
           <footer className="preview-footer-controls">
+            {/* Page rotation controls */}
+            <div className="rotate-controls-row flex-center" style={{ gap: '16px', marginBottom: '4px', width: '100%' }}>
+              <button 
+                id="doc-rotate-left"
+                onClick={() => handleRotate('left')}
+                className="filter-chip flex-center"
+                style={{ gap: '6px', padding: '8px 16px', display: 'flex', alignItems: 'center', flex: 1, justifyContent: 'center' }}
+              >
+                <RotateCcw size={14} />
+                <span>Rotate Left</span>
+              </button>
+              <button 
+                id="doc-rotate-right"
+                onClick={() => handleRotate('right')}
+                className="filter-chip flex-center"
+                style={{ gap: '6px', padding: '8px 16px', display: 'flex', alignItems: 'center', flex: 1, justifyContent: 'center' }}
+              >
+                <RotateCw size={14} />
+                <span>Rotate Right</span>
+              </button>
+            </div>
+
             {/* Monochromatic visual filter selectors */}
             <div className="filter-chip-row flex-center">
               <button 
@@ -712,6 +820,34 @@ export const DocScanView: React.FC<DocScanViewProps> = ({ onClose, onSaveSuccess
           </header>
 
           <div className="tray-scroll-area">
+            {pages.length > 0 && (
+              <div className="tray-filename-card" style={{ marginBottom: '20px', background: 'rgba(255,255,255,0.03)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'rgba(255,255,255,0.5)', marginBottom: '8px' }}>
+                  Document Name
+                </label>
+                <input 
+                  type="text"
+                  value={pdfTitle}
+                  onChange={(e) => setPdfTitle(e.target.value)}
+                  placeholder="Enter document name..."
+                  style={{
+                    width: '100%',
+                    background: 'rgba(0,0,0,0.3)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '8px',
+                    padding: '10px 12px',
+                    color: '#ffffff',
+                    fontSize: '0.85rem',
+                    outline: 'none',
+                    transition: 'border-color 0.2s',
+                    boxSizing: 'border-box'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = 'var(--color-primary)'}
+                  onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                />
+              </div>
+            )}
+
             {pages.length > 0 ? (
               <div className="tray-pages-grid">
                 {pages.map((page, index) => (
@@ -734,6 +870,50 @@ export const DocScanView: React.FC<DocScanViewProps> = ({ onClose, onSaveSuccess
                       <span className="tray-page-badge">{index + 1}</span>
                     </div>
                     <span className="tray-page-label">Page {index + 1} ({page.filter.toUpperCase()})</span>
+                    
+                    {/* Reorder Buttons */}
+                    <div className="tray-page-reorder-row flex-center" style={{ gap: '8px', marginTop: '6px', width: '100%' }}>
+                      <button
+                        onClick={() => handleMovePage(index, 'earlier')}
+                        disabled={index === 0}
+                        style={{
+                          flex: 1,
+                          background: 'rgba(255, 255, 255, 0.08)',
+                          border: '1px solid rgba(255, 255, 255, 0.05)',
+                          borderRadius: '6px',
+                          color: '#ffffff',
+                          padding: '8px 0',
+                          fontSize: '0.7rem',
+                          fontWeight: 'bold',
+                          opacity: index === 0 ? 0.3 : 1,
+                          pointerEvents: index === 0 ? 'none' : 'auto',
+                          cursor: index === 0 ? 'not-allowed' : 'pointer'
+                        }}
+                        title="Move Earlier"
+                      >
+                        ← Move Up
+                      </button>
+                      <button
+                        onClick={() => handleMovePage(index, 'later')}
+                        disabled={index === pages.length - 1}
+                        style={{
+                          flex: 1,
+                          background: 'rgba(255, 255, 255, 0.08)',
+                          border: '1px solid rgba(255, 255, 255, 0.05)',
+                          borderRadius: '6px',
+                          color: '#ffffff',
+                          padding: '8px 0',
+                          fontSize: '0.7rem',
+                          fontWeight: 'bold',
+                          opacity: index === pages.length - 1 ? 0.3 : 1,
+                          pointerEvents: index === pages.length - 1 ? 'none' : 'auto',
+                          cursor: index === pages.length - 1 ? 'not-allowed' : 'pointer'
+                        }}
+                        title="Move Later"
+                      >
+                        Move Down →
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
