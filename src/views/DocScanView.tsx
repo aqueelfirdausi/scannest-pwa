@@ -8,6 +8,7 @@ import './DocScanView.css';
 interface DocScanViewProps {
   onClose: () => void;
   onSaveSuccess: () => void;
+  onNavigateToSettings?: () => void;
 }
 
 type ScanFilterType = 'bw' | 'color' | 'original';
@@ -20,7 +21,7 @@ interface ScannedPage {
 
 type ViewModeType = 'camera' | 'preview' | 'tray_review';
 
-export const DocScanView: React.FC<DocScanViewProps> = ({ onClose, onSaveSuccess }) => {
+export const DocScanView: React.FC<DocScanViewProps> = ({ onClose, onSaveSuccess, onNavigateToSettings }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   
   const {
@@ -89,6 +90,18 @@ export const DocScanView: React.FC<DocScanViewProps> = ({ onClose, onSaveSuccess
       });
     }
   }, [stream]);
+
+  // Capture camera errors and save to localStorage
+  useEffect(() => {
+    if (error) {
+      const isPermissionDenied = error.toLowerCase().includes('permission') || error.toLowerCase().includes('allow') || error.toLowerCase().includes('notallowed');
+      const timestamp = new Date().toLocaleString();
+      const errDetail = `${isPermissionDenied ? 'PermissionDeniedError' : 'CameraError'}: ${error} (Captured on ${timestamp})`;
+      try {
+        localStorage.setItem('scannest_last_camera_error', errDetail);
+      } catch (_) {}
+    }
+  }, [error]);
 
   // Mount/Unmount effect - manage live feed safely
   // We use a ref to track the current viewMode to avoid re-running on every render
@@ -992,16 +1005,37 @@ export const DocScanView: React.FC<DocScanViewProps> = ({ onClose, onSaveSuccess
             )}
 
             {error && (
-              <div className="camera-error-overlay flex-center">
+              <div className="camera-error-overlay flex-center" style={{ padding: '24px', textAlign: 'center' }}>
                 <div className="error-icon-box flex-center">
                   <AlertTriangle size={28} />
                 </div>
                 <h4 className="error-title">Access Blocked</h4>
-                <p className="error-message">{error}</p>
+                
+                {/* Check if permission denied */}
+                {(error.toLowerCase().includes('permission') || error.toLowerCase().includes('allow') || error.toLowerCase().includes('notallowed')) ? (
+                  <>
+                    <p className="error-message" style={{ margin: '8px 0 16px 0', fontSize: '0.8rem', lineHeight: '1.4', color: 'rgba(255,255,255,0.7)' }}>
+                      Camera is blocked by browser permission. ScanNest cannot override this automatically.
+                    </p>
+                    {onNavigateToSettings && (
+                      <button
+                        onClick={onNavigateToSettings}
+                        className="btn-error-retry tap-target flex-center"
+                        style={{ background: 'var(--color-primary)', color: '#ffffff', marginBottom: '10px' }}
+                      >
+                        <span>Fix camera permission in Settings</span>
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <p className="error-message">{error}</p>
+                )}
+
                 <button 
                   id="camera-error-retry"
                   onClick={() => startCamera(facingMode)} 
                   className="btn-error-retry tap-target flex-center"
+                  style={{ background: 'rgba(255,255,255,0.1)', color: '#ffffff' }}
                 >
                   <RefreshCw size={16} />
                   <span>Retry Camera</span>

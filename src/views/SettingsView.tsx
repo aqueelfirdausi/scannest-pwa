@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   ShieldCheck, HardDrive, Trash2, Info, Download, Upload, AlertTriangle,
-  Camera, CheckCircle2, XCircle, RefreshCw, Wrench, RotateCcw, ChevronRight
+  Camera, CheckCircle2, XCircle, RefreshCw, RotateCcw, ChevronRight, ExternalLink
 } from 'lucide-react';
 import { clearAllScans } from '../services/db';
 import './SettingsView.css';
@@ -69,6 +69,31 @@ export const SettingsView: React.FC = () => {
   const [cameraEnv] = useState<CameraEnv>(getCameraEnv);
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'ok' | 'fail'>('idle');
   const [testMessage, setTestMessage] = useState<string>('');
+  const [permissionState, setPermissionState] = useState<'granted' | 'prompt' | 'denied' | 'unknown'>('unknown');
+  const [lastCameraError, setLastCameraError] = useState<string | null>(null);
+
+  // Monitor device permission query availability
+  useEffect(() => {
+    try {
+      const lastError = localStorage.getItem('scannest_last_camera_error');
+      if (lastError) setLastCameraError(lastError);
+    } catch (_) {}
+
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: 'camera' as PermissionName })
+        .then((status) => {
+          setPermissionState(status.state as any);
+          status.onchange = () => {
+            setPermissionState(status.state as any);
+          };
+        })
+        .catch(() => {
+          setPermissionState('unknown');
+        });
+    } else {
+      setPermissionState('unknown');
+    }
+  }, []);
 
   const handleCameraTest = async () => {
     if (!cameraEnv.secureContext) {
@@ -87,13 +112,37 @@ export const SettingsView: React.FC = () => {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      // Stop immediately — we only verify access, never keep the stream
+      // Immediately stop all tracks to release device hardware
       stream.getTracks().forEach(t => t.stop());
       setTestStatus('ok');
       setTestMessage('Camera access is working on this device.');
+      
+      // Update permission state
+      if (navigator.permissions && navigator.permissions.query) {
+        const status = await navigator.permissions.query({ name: 'camera' as PermissionName });
+        setPermissionState(status.state as any);
+      } else {
+        setPermissionState('granted');
+      }
+
+      // Clear last error in localStorage
+      localStorage.removeItem('scannest_last_camera_error');
+      setLastCameraError(null);
     } catch (err: any) {
       setTestStatus('fail');
-      setTestMessage(resolveTestError(err));
+      const friendlyErr = resolveTestError(err);
+      setTestMessage(friendlyErr);
+
+      // Save error details in localStorage
+      const timestamp = new Date().toLocaleString();
+      const errorMsg = `${err.name || 'UnknownError'}: ${friendlyErr} (Logged on ${timestamp})`;
+      localStorage.setItem('scannest_last_camera_error', errorMsg);
+      setLastCameraError(errorMsg);
+
+      // Update permission state on block
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setPermissionState('denied');
+      }
     }
   };
 
@@ -228,21 +277,21 @@ export const SettingsView: React.FC = () => {
 
       {/* ── TROUBLESHOOTING & DEVICE ACCESS ─────────────────────────────────── */}
       <section className="settings-group">
-        <h4 className="group-title">Troubleshooting &amp; Device Access</h4>
+        <h4 className="group-title">Camera Permission Recovery &amp; Safety</h4>
 
-        {/* 1. Camera Access Check */}
+        {/* 1. Camera Permission Recovery Assistant */}
         <div className="settings-card">
           <div className="trouble-section-header flex-center">
-            <div className="trouble-icon-wrap flex-center">
+            <div className="trouble-icon-wrap flex-center" style={{ background: 'rgba(99, 102, 241, 0.12)', color: 'var(--color-primary)' }}>
               <Camera size={16} />
             </div>
             <div>
-              <span className="trouble-section-title">Camera Access Check</span>
-              <span className="trouble-section-desc">Verify your browser can reach the camera</span>
+              <span className="trouble-section-title">Camera Permission Recovery Assistant</span>
+              <span className="trouble-section-desc">Resolve blocked or denied camera access</span>
             </div>
           </div>
 
-          <div className="cam-env-list">
+          <div className="cam-env-list" style={{ marginTop: '14px' }}>
             <div className="cam-env-row">
               {env.secureContext
                 ? <CheckCircle2 size={14} className="env-ok" />
@@ -256,7 +305,7 @@ export const SettingsView: React.FC = () => {
               {env.mediaDevicesAvailable
                 ? <CheckCircle2 size={14} className="env-ok" />
                 : <XCircle size={14} className="env-fail" />}
-              <span className="env-label">navigator.mediaDevices</span>
+              <span className="env-label">Browser Camera API</span>
               <span className={`env-badge ${env.mediaDevicesAvailable ? 'ok' : 'fail'}`}>
                 {env.mediaDevicesAvailable ? 'Available' : 'Unavailable'}
               </span>
@@ -265,104 +314,124 @@ export const SettingsView: React.FC = () => {
               {env.getUserMediaAvailable
                 ? <CheckCircle2 size={14} className="env-ok" />
                 : <XCircle size={14} className="env-fail" />}
-              <span className="env-label">getUserMedia API</span>
+              <span className="env-label">getUserMedia API Support</span>
               <span className={`env-badge ${env.getUserMediaAvailable ? 'ok' : 'fail'}`}>
                 {env.getUserMediaAvailable ? 'Supported' : 'Unsupported'}
               </span>
             </div>
+            <div className="cam-env-row" style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid rgba(255,255,255,0.03)' }}>
+              <span className="env-label" style={{ fontWeight: 600 }}>Active Permission State:</span>
+              <span className={`env-badge ${permissionState === 'granted' ? 'ok' : permissionState === 'denied' ? 'fail' : 'warning'}`} style={{ textTransform: 'uppercase', fontWeight: 'bold' }}>
+                {permissionState}
+              </span>
+            </div>
           </div>
 
-          <div className="trouble-btn-row">
+          {lastCameraError && (
+            <div className="last-error-box" style={{ margin: '14px 0', padding: '10px 12px', background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.15)', borderRadius: '8px', fontSize: '0.78rem', color: '#fca5a5' }}>
+              <strong>Last recorded camera issue:</strong>
+              <div style={{ marginTop: '4px', fontFamily: 'monospace', fontSize: '0.72rem', wordBreak: 'break-word', lineHeight: '1.4' }}>{lastCameraError}</div>
+            </div>
+          )}
+
+          <div className="trouble-btn-row" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '14px' }}>
             <button
               id="settings-btn-camera-test"
               onClick={handleCameraTest}
               disabled={testStatus === 'testing'}
               className="trouble-action-btn flex-center"
+              style={{ flex: 1, minWidth: '150px' }}
             >
               {testStatus === 'testing'
-                ? <><RefreshCw size={14} className="spin-icon" /><span>Testing…</span></>
-                : <><Camera size={14} /><span>Test camera access</span></>}
+                ? <><RefreshCw size={14} className="spin-icon" /><span>Requesting…</span></>
+                : <><Camera size={14} /><span>Request Camera Access</span></>}
+            </button>
+
+            <button
+              id="settings-btn-open-browser"
+              onClick={() => window.open(window.location.origin, "_blank")}
+              className="trouble-action-btn flex-center"
+              style={{ flex: 1, minWidth: '150px', background: 'rgba(255, 255, 255, 0.08)', border: '1px solid rgba(255, 255, 255, 0.05)', color: '#ffffff' }}
+            >
+              <ExternalLink size={14} style={{ marginRight: '6px' }} />
+              <span>Open in browser tab</span>
             </button>
           </div>
 
+          <p className="guidance-note" style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginTop: '8px', lineHeight: '1.4', fontStyle: 'italic' }}>
+            “Some devices recover permissions more reliably from a standard browser tab first. Allow camera there, then reopen the installed PWA.”
+          </p>
+
           {testStatus === 'ok' && (
-            <div className="trouble-result ok flex-center animate-fade-in">
+            <div className="trouble-result ok flex-center animate-fade-in" style={{ marginTop: '12px' }}>
               <CheckCircle2 size={15} />
               <span>{testMessage}</span>
             </div>
           )}
           {testStatus === 'fail' && (
-            <div className="trouble-result fail flex-center animate-fade-in">
+            <div className="trouble-result fail flex-center animate-fade-in" style={{ marginTop: '12px' }}>
               <XCircle size={15} />
               <span>{testMessage}</span>
             </div>
           )}
+
+          {/* If denied, render the explicit Manual Reset Guidance Panel */}
+          {permissionState === 'denied' && (
+            <div className="manual-reset-panel animate-fade-in" style={{ marginTop: '16px', padding: '16px', background: 'rgba(245,158,11,0.06)', border: '1.5px dashed rgba(245,158,11,0.3)', borderRadius: '12px' }}>
+              <div className="flex-center" style={{ gap: '8px', color: '#f59e0b', fontWeight: 'bold', fontSize: '0.88rem', marginBottom: '12px' }}>
+                <AlertTriangle size={18} />
+                <span>Camera is Blocked (Manual Reset Required)</span>
+              </div>
+              <p style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.7)', lineHeight: '1.45', margin: '0 0 12px 0' }}>
+                Browser permissions are strictly managed by your OS/Browser. ScanNest cannot forcibly override this block. Please follow these steps to restore access:
+              </p>
+              
+              <div className="guidance-step-list" style={{ gap: '10px', display: 'flex', flexDirection: 'column' }}>
+                <div className="guidance-step" style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '8px', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+                  <ChevronRight size={13} className="step-chevron" style={{ marginTop: '3px', flexShrink: 0, color: '#f59e0b' }} />
+                  <div style={{ fontSize: '0.78rem' }}>
+                    <span className="step-platform" style={{ color: '#f59e0b', fontWeight: 600, display: 'block', marginBottom: '2px' }}>1. Android Chrome address bar lock</span>
+                    <span className="step-body" style={{ color: 'rgba(255,255,255,0.8)' }}>Open ScanNest in Chrome browser tab → tap lock/settings icon near address bar → permissions → Camera → Allow. Close and reopen the PWA app.</span>
+                  </div>
+                </div>
+                <div className="guidance-step" style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '8px', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+                  <ChevronRight size={13} className="step-chevron" style={{ marginTop: '3px', flexShrink: 0, color: '#f59e0b' }} />
+                  <div style={{ fontSize: '0.78rem' }}>
+                    <span className="step-platform" style={{ color: '#f59e0b', fontWeight: 600, display: 'block', marginBottom: '2px' }}>2. Full reset path in Chrome Settings</span>
+                    <span className="step-body" style={{ color: 'rgba(255,255,255,0.8)' }}>Chrome Settings → Site settings → Camera → find <code>scannest-app-ten.vercel.app</code> → Allow or Reset permissions.</span>
+                  </div>
+                </div>
+                <div className="guidance-step" style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+                  <ChevronRight size={13} className="step-chevron" style={{ marginTop: '3px', flexShrink: 0, color: '#f59e0b' }} />
+                  <div style={{ fontSize: '0.78rem' }}>
+                    <span className="step-platform" style={{ color: '#f59e0b', fontWeight: 600, display: 'block', marginBottom: '2px' }}>3. Android OS Application settings</span>
+                    <span className="step-body" style={{ color: 'rgba(255,255,255,0.8)' }}>Android Settings → Apps → Chrome → Permissions → Camera → Allow while using app.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* 2. Camera Reset Guidance */}
-        <div className="settings-card guidance-card">
-          <div className="trouble-section-header flex-center">
-            <div className="trouble-icon-wrap flex-center" style={{ background: 'rgba(245,158,11,0.12)', color: '#d97706' }}>
-              <Wrench size={16} />
-            </div>
-            <div>
-              <span className="trouble-section-title">Camera Permission Guidance</span>
-              <span className="trouble-section-desc">How to fix blocked camera access</span>
-            </div>
-          </div>
-
-          <p className="guidance-note">
-            Camera permissions are managed by your browser — ScanNest cannot override them directly.
-            Uninstalling a PWA does <strong>not</strong> always reset browser site permissions.
-          </p>
-
-          <div className="guidance-step-list">
-            <div className="guidance-step">
-              <ChevronRight size={13} className="step-chevron" />
-              <div>
-                <span className="step-platform">Android Chrome (quick way)</span>
-                <span className="step-body">Open this site in Chrome → tap the lock / info icon in the address bar → Permissions → Camera → Allow.</span>
-              </div>
-            </div>
-            <div className="guidance-step">
-              <ChevronRight size={13} className="step-chevron" />
-              <div>
-                <span className="step-platform">Android Chrome (full reset)</span>
-                <span className="step-body">Chrome menu → Settings → Site settings → Camera → find this site → set to Allow or Reset.</span>
-              </div>
-            </div>
-            <div className="guidance-step">
-              <ChevronRight size={13} className="step-chevron" />
-              <div>
-                <span className="step-platform">Safari on iOS</span>
-                <span className="step-body">iOS Settings → Safari → Camera → Allow. Or Settings → Privacy &amp; Security → Camera → ensure Safari is on.</span>
-              </div>
-            </div>
-            <div className="guidance-step">
-              <ChevronRight size={13} className="step-chevron" />
-              <div>
-                <span className="step-platform">After reinstalling PWA</span>
-                <span className="step-body">First uninstall the PWA, then go to Chrome site settings and reset camera permission, then reinstall the PWA.</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 3. Local Data Reset */}
+        {/* 2. Wipe ScanNest Local Data & Cached Files */}
         <div className="settings-card">
           <div className="trouble-section-header flex-center">
             <div className="trouble-icon-wrap flex-center" style={{ background: 'var(--color-danger-light)', color: 'var(--color-danger)' }}>
               <Trash2 size={16} />
             </div>
             <div>
-              <span className="trouble-section-title">Clear Local ScanNest Data</span>
-              <span className="trouble-section-desc">Wipe cached data, saved scans, and service worker</span>
+              <span className="trouble-section-title">Wipe ScanNest Local Data &amp; Cached Files</span>
+              <span className="trouble-section-desc">Clear IndexedDB, LocalStorage, and Cache Storage</span>
             </div>
           </div>
 
-          <p className="guidance-note">
-            This clears: all saved scan records from IndexedDB, Cache Storage entries from the service worker, and localStorage/sessionStorage. The service worker will also be unregistered so it re-installs cleanly on next load. <strong>This cannot be undone.</strong>
+          <p className="guidance-note" style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.6)', lineHeight: '1.45', margin: '10px 0' }}>
+            This clears: saved scan history records from IndexedDB, PWA Cache Storage files, and localStorage settings. The service worker will be unregistered to reload fresh code. <strong>This cannot be undone.</strong>
           </p>
+          
+          <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.15)', borderRadius: '8px', padding: '10px 12px', fontSize: '0.78rem', color: '#fca5a5', marginBottom: '14px', lineHeight: '1.4' }}>
+            <strong>Important note on permissions:</strong> Clearing ScanNest data does <strong>NOT</strong> reset Chrome's camera permission. Permissions must be reset manually in the browser or OS settings.
+          </div>
 
           {!showClearConfirm && clearResult === 'idle' && (
             <div className="trouble-btn-row">
@@ -372,23 +441,24 @@ export const SettingsView: React.FC = () => {
                 className="trouble-action-btn danger flex-center"
               >
                 <Trash2 size={14} />
-                <span>Clear local ScanNest data</span>
+                <span>Wipe ScanNest Local Data</span>
               </button>
             </div>
           )}
 
           {showClearConfirm && (
-            <div className="danger-confirm-box animate-fade-in">
-              <div className="danger-warning-message flex-center">
-                <AlertTriangle size={18} className="warning-icon" />
-                <span>Clear local scans and app cache from this device? This cannot be undone.</span>
+            <div className="danger-confirm-box animate-fade-in" style={{ padding: '12px 0' }}>
+              <div className="danger-warning-message flex-center" style={{ gap: '8px', marginBottom: '12px' }}>
+                <AlertTriangle size={18} className="warning-icon" style={{ color: 'var(--color-danger)' }} />
+                <span style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.9)' }}>Clear local scans and app cache from this device? This cannot be undone.</span>
               </div>
-              <div className="danger-confirm-actions">
+              <div className="danger-confirm-actions" style={{ display: 'flex', gap: '10px' }}>
                 <button
                   id="settings-btn-clear-cancel"
                   onClick={() => setShowClearConfirm(false)}
                   className="btn-clear-cancel tap-target"
                   disabled={clearing}
+                  style={{ flex: 1, padding: '10px 0', border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', borderRadius: '8px', color: '#ffffff', fontSize: '0.8rem' }}
                 >
                   Cancel
                 </button>
@@ -397,6 +467,7 @@ export const SettingsView: React.FC = () => {
                   onClick={handleClearData}
                   className="btn-clear-confirm tap-target flex-center"
                   disabled={clearing}
+                  style={{ flex: 1.5, padding: '10px 0', background: 'var(--color-danger)', border: 'none', borderRadius: '8px', color: '#ffffff', fontSize: '0.8rem', justifyContent: 'center', gap: '6px' }}
                 >
                   {clearing
                     ? <><RefreshCw size={13} className="spin-icon" /><span>Clearing…</span></>
@@ -407,29 +478,44 @@ export const SettingsView: React.FC = () => {
           )}
 
           {clearResult === 'success' && (
-            <div className="trouble-result ok flex-center animate-fade-in" style={{ margin: '12px 16px' }}>
-              <CheckCircle2 size={15} />
-              <span>All local ScanNest data cleared. Close and reopen the app for a fresh start.</span>
+            <div className="animate-fade-in" style={{ marginTop: '12px' }}>
+              <div className="trouble-result ok flex-center" style={{ margin: '12px 0' }}>
+                <CheckCircle2 size={15} />
+                <span>All local ScanNest data successfully wiped!</span>
+              </div>
+
+              {/* Fresh Reinstall Checklist */}
+              <div className="reinstall-checklist" style={{ padding: '16px', background: 'rgba(16, 185, 129, 0.06)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '12px', marginTop: '16px' }}>
+                <div style={{ color: '#10b981', fontWeight: 'bold', fontSize: '0.85rem', marginBottom: '10px' }}>
+                  Fresh Reinstall Checklist:
+                </div>
+                <ol style={{ margin: 0, paddingLeft: '18px', fontSize: '0.78rem', color: 'rgba(255,255,255,0.85)', display: 'flex', flexDirection: 'column', gap: '6px', lineHeight: '1.45' }}>
+                  <li>Close this ScanNest PWA app window completely.</li>
+                  <li>Open standard Google Chrome browser on your device.</li>
+                  <li>Visit <code>https://scannest-app-ten.vercel.app</code> in Chrome.</li>
+                  <li>Tap the **Scan Document** camera shutter to trigger prompt.</li>
+                  <li>Tap **Allow** camera access in Chrome.</li>
+                  <li>Add/install ScanNest to your device home screen again.</li>
+                </ol>
+              </div>
+
+              <div className="trouble-btn-row" style={{ marginTop: '14px' }}>
+                <button
+                  id="settings-btn-reload"
+                  onClick={handleReload}
+                  className="trouble-action-btn flex-center"
+                  style={{ width: '100%', justifyContent: 'center' }}
+                >
+                  <RotateCcw size={14} style={{ marginRight: '6px' }} />
+                  <span>Reload app</span>
+                </button>
+              </div>
             </div>
           )}
           {clearResult === 'fail' && (
-            <div className="trouble-result fail flex-center animate-fade-in" style={{ margin: '12px 16px' }}>
+            <div className="trouble-result fail flex-center animate-fade-in" style={{ margin: '12px 0' }}>
               <XCircle size={15} />
               <span>Some data could not be cleared. Try manually clearing site data from your browser settings.</span>
-            </div>
-          )}
-
-          {/* 4. App Reload */}
-          {clearResult === 'success' && (
-            <div className="trouble-btn-row animate-fade-in">
-              <button
-                id="settings-btn-reload"
-                onClick={handleReload}
-                className="trouble-action-btn flex-center"
-              >
-                <RotateCcw size={14} />
-                <span>Reload app</span>
-              </button>
             </div>
           )}
         </div>

@@ -88,13 +88,23 @@ export const AppShell: React.FC = () => {
                   setActiveTab('history'); // Automatically flip to My Scans history tab so they see it!
                   showToast('PDF compiled & saved to local vault!');
                 }}
+                onNavigateToSettings={() => {
+                  handleCloseOverlay();
+                  setActiveTab('settings');
+                }}
               />
             </div>
           )}
 
           {activeOverlay === 'qr_scan' && (
             <div className="overlay-view-wrapper">
-              <QRScanView onClose={handleCloseOverlay} />
+              <QRScanView 
+                onClose={handleCloseOverlay} 
+                onNavigateToSettings={() => {
+                  handleCloseOverlay();
+                  setActiveTab('settings');
+                }}
+              />
             </div>
           )}
 
