@@ -45,15 +45,31 @@ export const DocScanView: React.FC<DocScanViewProps> = ({ onClose, onSaveSuccess
   const [viewMode, setViewMode] = useState<ViewModeType>('camera');
   const [exporting, setExporting] = useState(false);
 
-  // Mount/Unmount effect - manage live feed safely
+  // Wire camera stream to video element srcObject whenever stream changes
   useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch((err) => {
+        console.warn('[ScanNest DocScan] Video autoplay was blocked:', err);
+      });
+    }
+  }, [stream]);
+
+  // Mount/Unmount effect - manage live feed safely
+  // We use a ref to track the current viewMode to avoid re-running on every render
+  const viewModeRef = useRef<ViewModeType>('camera');
+  useEffect(() => {
+    viewModeRef.current = viewMode;
     if (viewMode === 'camera') {
       startCamera('environment'); // Always default to environment/rear camera for documents
+    } else {
+      stopCamera();
     }
     return () => {
       stopCamera();
     };
-  }, [startCamera, stopCamera, viewMode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode]);
 
   // Safe flashlight/torch constraint binding
   useEffect(() => {
@@ -514,7 +530,7 @@ export const DocScanView: React.FC<DocScanViewProps> = ({ onClose, onSaveSuccess
                   className="btn-error-retry tap-target flex-center"
                 >
                   <RefreshCw size={16} />
-                  <span>Grant Permission</span>
+                  <span>Retry Camera</span>
                 </button>
               </div>
             )}

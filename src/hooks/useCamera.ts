@@ -18,7 +18,7 @@ export const useCamera = (): UseCameraResult => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [facingMode, setFacingMode] = useState<CameraFacingMode>('environment');
-  
+
   // Keep track of the active stream via ref to handle cleanups reliably
   const activeStreamRef = useRef<MediaStream | null>(null);
 
@@ -33,65 +33,93 @@ export const useCamera = (): UseCameraResult => {
     }
   }, []);
 
-  const startCamera = useCallback(async (mode: CameraFacingMode = facingMode): Promise<MediaStream | null> => {
+  const startCamera = useCallback(async (mode: CameraFacingMode = 'environment'): Promise<MediaStream | null> => {
     // Stop any existing stream first to avoid hardware locking
     stopCamera();
-    
+
     setLoading(true);
     setError(null);
-    
-    // Check browser compatibility
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      const errMsg = 'Camera APIs are not supported by this browser. Please use Chrome, Safari, or a modern mobile browser.';
+
+    // Check for insecure context (camera requires HTTPS or localhost)
+    if (typeof window !== 'undefined' && window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+      const errMsg = 'Camera requires a secure connection (HTTPS). Please access this app via its HTTPS URL.';
       setError(errMsg);
       setLoading(false);
       return null;
     }
 
-    // Set constraints optimized for document scanning clarity
-    const constraints: MediaStreamConstraints = {
+    // Check browser compatibility
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      const errMsg = 'Camera is not supported by this browser or context. Please use Chrome or Safari on a modern device.';
+      setError(errMsg);
+      setLoading(false);
+      return null;
+    }
+
+    // Strategy 1: Try with ideal facingMode + ideal resolution (most compatible)
+    const primaryConstraints: MediaStreamConstraints = {
       video: {
-        facingMode: mode,
-        width: { ideal: 1920, max: 3840 },
-        height: { ideal: 1080, max: 2160 },
+        facingMode: { ideal: mode },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
       },
-      audio: false
+      audio: false,
     };
 
+    // Strategy 2: Minimal fallback — just request any video (widest compatibility)
+    const fallbackConstraints: MediaStreamConstraints = {
+      video: true,
+      audio: false,
+    };
+
+    let mediaStream: MediaStream | null = null;
+
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+      console.log('[ScanNest Camera] Attempting primary constraints:', JSON.stringify(primaryConstraints));
+      mediaStream = await navigator.mediaDevices.getUserMedia(primaryConstraints);
+    } catch (primaryErr: any) {
+      console.warn('[ScanNest Camera] Primary constraints failed:', primaryErr.name, primaryErr.message);
+
+      // For overconstrained or not-found, retry with simple constraints
+      if (
+        primaryErr.name === 'OverconstrainedError' ||
+        primaryErr.name === 'ConstraintNotSatisfiedError' ||
+        primaryErr.name === 'NotFoundError' ||
+        primaryErr.name === 'DevicesNotFoundError'
+      ) {
+        try {
+          console.log('[ScanNest Camera] Retrying with simple fallback constraints...');
+          mediaStream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+        } catch (fallbackErr: any) {
+          console.error('[ScanNest Camera] Fallback also failed:', fallbackErr.name, fallbackErr.message);
+          // Fall through to error handling below using fallbackErr
+          const userFriendlyError = resolveErrorMessage(fallbackErr);
+          setError(userFriendlyError);
+          setLoading(false);
+          return null;
+        }
+      } else {
+        // Non-overconstrained errors (permission denied, in use, etc.)
+        const userFriendlyError = resolveErrorMessage(primaryErr);
+        setError(userFriendlyError);
+        setLoading(false);
+        return null;
+      }
+    }
+
+    if (mediaStream) {
       activeStreamRef.current = mediaStream;
       setStream(mediaStream);
       setFacingMode(mode);
       setLoading(false);
+      console.log('[ScanNest Camera] Stream acquired successfully. Tracks:', mediaStream.getTracks().map(t => t.label));
       return mediaStream;
-    } catch (err: any) {
-      console.error('[ScanNest Camera Error] ', err);
-      let userFriendlyError = 'Failed to open camera. Please make sure no other apps are using it.';
-      
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        userFriendlyError = 'Camera permission was denied. Please enable camera access in your browser settings to scan.';
-      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        userFriendlyError = 'No camera hardware detected on this device.';
-      } else if (err.name === 'OverconstrainedError') {
-        // Fallback constraint attempt in case high resolution constraints are rejected
-        try {
-          const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-          activeStreamRef.current = fallbackStream;
-          setStream(fallbackStream);
-          setFacingMode(mode);
-          setLoading(false);
-          return fallbackStream;
-        } catch (fallbackErr) {
-          userFriendlyError = 'Your hardware does not match the scanning resolution requirements.';
-        }
-      }
-
-      setError(userFriendlyError);
-      setLoading(false);
-      return null;
     }
-  }, [facingMode, stopCamera]);
+
+    setError('Failed to open camera. Please try again.');
+    setLoading(false);
+    return null;
+  }, [stopCamera]);
 
   const switchCamera = useCallback(async (): Promise<MediaStream | null> => {
     const nextMode: CameraFacingMode = facingMode === 'environment' ? 'user' : 'environment';
@@ -109,13 +137,13 @@ export const useCamera = (): UseCameraResult => {
       const canvas = document.createElement('canvas');
       canvas.width = videoElement.videoWidth;
       canvas.height = videoElement.videoHeight;
-      
+
       const ctx = canvas.getContext('2d');
       if (!ctx) return null;
 
       // Draw the active video frame pixels onto canvas
       ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-      
+
       // Export frame as compressed JPEG
       return canvas.toDataURL('image/jpeg', 0.9);
     } catch (captureErr) {
@@ -132,6 +160,37 @@ export const useCamera = (): UseCameraResult => {
     startCamera,
     stopCamera,
     switchCamera,
-    captureFrame
+    captureFrame,
   };
 };
+
+/**
+ * Map MediaDevices API error names to clear, user-facing messages.
+ */
+function resolveErrorMessage(err: any): string {
+  const name: string = err?.name ?? '';
+
+  if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+    return 'Camera permission was denied. Please open your browser settings, allow camera access for this site, then tap Retry.';
+  }
+  if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+    return 'No camera was found on this device. Please ensure a camera is connected and not blocked by another app.';
+  }
+  if (name === 'NotReadableError' || name === 'TrackStartError') {
+    return 'Camera is already in use by another app or tab. Please close other camera apps and tap Retry.';
+  }
+  if (name === 'OverconstrainedError' || name === 'ConstraintNotSatisfiedError') {
+    return 'Your camera does not support the required settings. Please tap Retry to try with basic settings.';
+  }
+  if (name === 'SecurityError') {
+    return 'Camera access is blocked due to a security policy. Please ensure this app is accessed over HTTPS.';
+  }
+  if (name === 'AbortError') {
+    return 'Camera access was interrupted. Please tap Retry.';
+  }
+  if (name === 'TypeError') {
+    return 'Camera request failed due to invalid settings. Please tap Retry.';
+  }
+
+  return `Failed to open camera (${name || 'unknown error'}). Please close other camera apps and tap Retry.`;
+}

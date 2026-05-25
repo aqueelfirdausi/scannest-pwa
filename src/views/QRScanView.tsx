@@ -29,6 +29,16 @@ export const QRScanView: React.FC<QRScanViewProps> = ({ onClose }) => {
   const [scannedResult, setScannedResult] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Wire camera stream to video element srcObject whenever stream changes
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch((err) => {
+        console.warn('[ScanNest QRScan] Video autoplay was blocked:', err);
+      });
+    }
+  }, [stream]);
+
   // Mount/Unmount effect - manage live feed safely
   useEffect(() => {
     startCamera('environment'); // Always default to environment/rear camera for QR codes
@@ -39,7 +49,8 @@ export const QRScanView: React.FC<QRScanViewProps> = ({ onClose }) => {
       }
       stopCamera();
     };
-  }, [startCamera, stopCamera]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Safe flashlight/torch constraint binding
   useEffect(() => {
@@ -311,7 +322,7 @@ export const QRScanView: React.FC<QRScanViewProps> = ({ onClose }) => {
                 className="btn-error-retry tap-target flex-center"
               >
                 <RefreshCw size={16} />
-                <span>Grant Permission</span>
+                <span>Retry Camera</span>
               </button>
             </div>
           )}
