@@ -158,3 +158,27 @@ export const renameScan = async (id: string, newTitle: string): Promise<void> =>
     };
   });
 };
+
+/**
+ * Permanently clear every scan record from the local IndexedDB store.
+ * Used by the Settings recovery toolkit. Does not touch DB schema.
+ */
+export const clearAllScans = async (): Promise<void> => {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.clear();
+
+    request.onsuccess = () => {
+      console.log('[ScanNest DB] All scan records cleared from IndexedDB.');
+      resolve();
+    };
+
+    request.onerror = () => {
+      console.error('[ScanNest DB] clearAllScans failed:', request.error);
+      reject(request.error);
+    };
+  });
+};
+
