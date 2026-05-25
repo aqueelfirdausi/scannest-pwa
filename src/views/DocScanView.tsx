@@ -40,6 +40,25 @@ export const DocScanView: React.FC<DocScanViewProps> = ({ onClose, onSaveSuccess
   const [activeFilter, setActiveFilter] = useState<ScanFilterType>('bw');
   const [shutterActive, setShutterActive] = useState(false);
   
+  // Crop state in normalized coordinates (0 to 1)
+  const [crop, setCrop] = useState({
+    left: 0.05,
+    top: 0.05,
+    right: 0.95,
+    bottom: 0.95
+  });
+
+  // Track exact layout dimensions of the contain-scaled preview image
+  const [imgLayout, setImgLayout] = useState<{
+    width: number;
+    height: number;
+    left: number;
+    top: number;
+  } | null>(null);
+
+  const imgRef = useRef<HTMLImageElement>(null);
+  const activeHandleRef = useRef<string | null>(null);
+
   // Multi-page temporary session tray states
   const [pages, setPages] = useState<ScannedPage[]>([]);
   const [viewMode, setViewMode] = useState<ViewModeType>('camera');
@@ -88,6 +107,165 @@ export const DocScanView: React.FC<DocScanViewProps> = ({ onClose, onSaveSuccess
     }
   }, [flashOn, stream, viewMode]);
 
+  // Dynamic layout calculator for contain-fit displayed preview image
+  const updateImageLayout = () => {
+    const img = imgRef.current;
+    if (!img) return;
+
+    const naturalWidth = img.naturalWidth;
+    const naturalHeight = img.naturalHeight;
+
+    if (!naturalWidth || !naturalHeight) return;
+
+    const parent = img.parentElement;
+    if (!parent) return;
+
+    const parentRect = parent.getBoundingClientRect();
+    const parentWidth = parentRect.width;
+    const parentHeight = parentRect.height;
+
+    const containerRatio = parentWidth / parentHeight;
+    const imageRatio = naturalWidth / naturalHeight;
+
+    let displayedWidth = 0;
+    let displayedHeight = 0;
+    let xOffset = 0;
+    let yOffset = 0;
+
+    if (imageRatio > containerRatio) {
+      displayedWidth = parentWidth;
+      displayedHeight = parentWidth / imageRatio;
+      xOffset = 0;
+      yOffset = (parentHeight - displayedHeight) / 2;
+    } else {
+      displayedHeight = parentHeight;
+      displayedWidth = parentHeight * imageRatio;
+      xOffset = (parentWidth - displayedWidth) / 2;
+      yOffset = 0;
+    }
+
+    setImgLayout({
+      width: displayedWidth,
+      height: displayedHeight,
+      left: xOffset,
+      top: yOffset
+    });
+  };
+
+  useEffect(() => {
+    if (viewMode === 'preview') {
+      window.addEventListener('resize', updateImageLayout);
+      return () => window.removeEventListener('resize', updateImageLayout);
+    }
+  }, [viewMode]);
+
+  // Draggable pointer handlers for corner adjustment handles
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>, handle: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    activeHandleRef.current = handle;
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!activeHandleRef.current || !imgLayout) return;
+    const container = e.currentTarget.parentElement;
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    
+    // Convert current client pointer to container relative coordinates
+    const clientXRel = e.clientX - rect.left;
+    const clientYRel = e.clientY - rect.top;
+
+    // Convert coordinates relative to contain-fitted active image bounds
+    let x = (clientXRel - imgLayout.left) / imgLayout.width;
+    let y = (clientYRel - imgLayout.top) / imgLayout.height;
+
+    // Clamp inside [0, 1] bounds of active image frame
+    x = Math.max(0, Math.min(1, x));
+    y = Math.max(0, Math.min(1, y));
+
+    const minSize = 0.1; // enforce 10% safe minimum size to prevent handle collapse
+
+    setCrop((prev) => {
+      const next = { ...prev };
+      const handle = activeHandleRef.current;
+
+      if (handle === 'tl') {
+        next.left = Math.min(x, prev.right - minSize);
+        next.top = Math.min(y, prev.bottom - minSize);
+      } else if (handle === 'tr') {
+        next.right = Math.max(x, prev.left + minSize);
+        next.top = Math.min(y, prev.bottom - minSize);
+      } else if (handle === 'bl') {
+        next.left = Math.min(x, prev.right - minSize);
+        next.bottom = Math.max(y, prev.top + minSize);
+      } else if (handle === 'br') {
+        next.right = Math.max(x, prev.left + minSize);
+        next.bottom = Math.max(y, prev.top + minSize);
+      }
+
+      return next;
+    });
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (activeHandleRef.current) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+      activeHandleRef.current = null;
+    }
+  };
+
+  // Convert normalized crop rectangle to natural pixels, clip, apply filters, and output compressed JPEG
+  const processCropAndFilter = (
+    originalDataUrl: string,
+    cropNorm: { left: number; top: number; right: number; bottom: number },
+    filter: ScanFilterType
+  ): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = originalDataUrl;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        
+        // Convert normalized bounds back to natural image pixel space
+        const x = cropNorm.left * img.width;
+        const y = cropNorm.top * img.height;
+        const width = (cropNorm.right - cropNorm.left) * img.width;
+        const height = (cropNorm.bottom - cropNorm.top) * img.height;
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(originalDataUrl);
+          return;
+        }
+
+        // Apply HTML5 canvas filter variables
+        if (filter === 'bw') {
+          ctx.filter = 'contrast(1.45) grayscale(1) brightness(1.08)';
+        } else if (filter === 'color') {
+          ctx.filter = 'saturate(1.35) contrast(1.06) brightness(1.03)';
+        } else {
+          ctx.filter = 'none';
+        }
+
+        // Draw only selected crop source region into destination canvas
+        ctx.drawImage(
+          img,
+          x, y, width, height, // Source bounds
+          0, 0, width, height  // Destination bounds
+        );
+
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.onerror = () => resolve(originalDataUrl);
+    });
+  };
+
   // Capture current video frame and switch to single-page review/preview
   const handleCapture = () => {
     if (!videoRef.current) return;
@@ -105,24 +283,42 @@ export const DocScanView: React.FC<DocScanViewProps> = ({ onClose, onSaveSuccess
   };
 
   // Add the currently snapped page + selected scan filter into the tray
-  const handleKeepPage = () => {
+  const handleKeepPage = async () => {
     if (capturedImage) {
-      setPages([
-        ...pages,
-        {
-          id: Date.now().toString(),
-          dataUrl: capturedImage,
-          filter: activeFilter
-        }
-      ]);
-      setCapturedImage(null);
-      setViewMode('camera'); // Return to viewfinder for next page
+      try {
+        const processedDataUrl = await processCropAndFilter(capturedImage, crop, activeFilter);
+        setPages([
+          ...pages,
+          {
+            id: Date.now().toString(),
+            dataUrl: processedDataUrl,
+            filter: activeFilter
+          }
+        ]);
+        setCapturedImage(null);
+        // Reset crop settings for the next capture
+        setCrop({
+          left: 0.05,
+          top: 0.05,
+          right: 0.95,
+          bottom: 0.95
+        });
+        setViewMode('camera'); // Return to viewfinder for next page
+      } catch (err) {
+        console.error('Failed to process image crop:', err);
+      }
     }
   };
 
   // Wire Retake to discard captured image and restart stream
   const handleRetake = () => {
     setCapturedImage(null);
+    setCrop({
+      left: 0.05,
+      top: 0.05,
+      right: 0.95,
+      bottom: 0.95
+    });
     setViewMode('camera');
   };
 
@@ -184,7 +380,9 @@ export const DocScanView: React.FC<DocScanViewProps> = ({ onClose, onSaveSuccess
         const page = pages[i];
         
         // 1. Bake CSS filter choices permanently into the image pixels
-        const bakedDataUrl = await bakeFilterToImage(page.dataUrl, page.filter);
+        // Since crop and filter are already baked into page.dataUrl during Keep Page,
+        // we pass 'original' to avoid double-filtering, but still get standard compression.
+        const bakedDataUrl = await bakeFilterToImage(page.dataUrl, 'original');
 
         if (i > 0) {
           pdf.addPage();
@@ -335,20 +533,116 @@ export const DocScanView: React.FC<DocScanViewProps> = ({ onClose, onSaveSuccess
             </button>
           </header>
 
-          <div className="preview-canvas-area flex-center">
+          <div className="preview-canvas-area flex-center" style={{ flexDirection: 'column', gap: '12px' }}>
+            <div className="crop-helper-text" style={{ fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.6)', fontWeight: 500 }}>
+              Drag corners to adjust page edges.
+            </div>
             <div className="simulated-document-page">
-              <div className="document-corner tl"></div>
-              <div className="document-corner tr"></div>
-              <div className="document-corner bl"></div>
-              <div className="document-corner br"></div>
-              
-              <div className="simulated-doc-content flex-center">
+              <div className="simulated-doc-content flex-center" style={{ position: 'relative', width: '100%', height: '100%' }}>
                 <img 
+                  ref={imgRef}
                   src={capturedImage} 
                   className="captured-preview-img" 
                   style={getFilterStyle(activeFilter)} 
                   alt="Scanned document page"
+                  onLoad={updateImageLayout}
                 />
+                
+                {imgLayout && (
+                  <div 
+                    className="crop-overlay-container"
+                    style={{
+                      position: 'absolute',
+                      left: imgLayout.left,
+                      top: imgLayout.top,
+                      width: imgLayout.width,
+                      height: imgLayout.height,
+                      overflow: 'hidden'
+                    }}
+                  >
+                    {/* Dimmed background outside crop box using box-shadow */}
+                    <div 
+                      className="crop-border-box"
+                      style={{
+                        position: 'absolute',
+                        left: `${crop.left * 100}%`,
+                        top: `${crop.top * 100}%`,
+                        width: `${(crop.right - crop.left) * 100}%`,
+                        height: `${(crop.bottom - crop.top) * 100}%`,
+                        border: '2.5px solid var(--color-primary)',
+                        boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.5)',
+                        zIndex: 2,
+                        pointerEvents: 'none'
+                      }}
+                    />
+                  </div>
+                )}
+                
+                {/* Render handles outside overflow:hidden container so they aren't clipped */}
+                {imgLayout && (
+                  <>
+                    <div 
+                      className="crop-handle tl"
+                      style={{
+                        position: 'absolute',
+                        left: imgLayout.left + crop.left * imgLayout.width,
+                        top: imgLayout.top + crop.top * imgLayout.height,
+                        transform: 'translate(-50%, -50%)',
+                        cursor: 'nwse-resize',
+                        zIndex: 20,
+                        touchAction: 'none'
+                      }}
+                      onPointerDown={(e) => handlePointerDown(e, 'tl')}
+                      onPointerMove={handlePointerMove}
+                      onPointerUp={handlePointerUp}
+                    />
+                    <div 
+                      className="crop-handle tr"
+                      style={{
+                        position: 'absolute',
+                        left: imgLayout.left + crop.right * imgLayout.width,
+                        top: imgLayout.top + crop.top * imgLayout.height,
+                        transform: 'translate(-50%, -50%)',
+                        cursor: 'nesw-resize',
+                        zIndex: 20,
+                        touchAction: 'none'
+                      }}
+                      onPointerDown={(e) => handlePointerDown(e, 'tr')}
+                      onPointerMove={handlePointerMove}
+                      onPointerUp={handlePointerUp}
+                    />
+                    <div 
+                      className="crop-handle bl"
+                      style={{
+                        position: 'absolute',
+                        left: imgLayout.left + crop.left * imgLayout.width,
+                        top: imgLayout.top + crop.bottom * imgLayout.height,
+                        transform: 'translate(-50%, -50%)',
+                        cursor: 'nesw-resize',
+                        zIndex: 20,
+                        touchAction: 'none'
+                      }}
+                      onPointerDown={(e) => handlePointerDown(e, 'bl')}
+                      onPointerMove={handlePointerMove}
+                      onPointerUp={handlePointerUp}
+                    />
+                    <div 
+                      className="crop-handle br"
+                      style={{
+                        position: 'absolute',
+                        left: imgLayout.left + crop.right * imgLayout.width,
+                        top: imgLayout.top + crop.bottom * imgLayout.height,
+                        transform: 'translate(-50%, -50%)',
+                        cursor: 'nwse-resize',
+                        zIndex: 20,
+                        touchAction: 'none'
+                      }}
+                      onPointerDown={(e) => handlePointerDown(e, 'br')}
+                      onPointerMove={handlePointerMove}
+                      onPointerUp={handlePointerUp}
+                    />
+                  </>
+                )}
               </div>
             </div>
           </div>
