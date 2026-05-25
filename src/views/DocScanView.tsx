@@ -535,31 +535,29 @@ export const DocScanView: React.FC<DocScanViewProps> = ({ onClose, onSaveSuccess
               </div>
             )}
 
-            {/* Video Preview feed and crop visual lines */}
-            {!loading && !error && (
-              <div className="camera-video-wrapper">
-                <video 
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="camera-video-feed"
-                />
+            {/* Video Preview feed - always kept in DOM so videoRef is never null when stream arrives */}
+            <div className="camera-video-wrapper" style={{ display: loading || error ? 'none' : 'block' }}>
+              <video 
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="camera-video-feed"
+              />
+              
+              <div className="document-framing-box flex-center">
+                <div className="corner-bracket top-left"></div>
+                <div className="corner-bracket top-right"></div>
+                <div className="corner-bracket bottom-left"></div>
+                <div className="corner-bracket bottom-right"></div>
                 
-                <div className="document-framing-box flex-center">
-                  <div className="corner-bracket top-left"></div>
-                  <div className="corner-bracket top-right"></div>
-                  <div className="corner-bracket bottom-left"></div>
-                  <div className="corner-bracket bottom-right"></div>
-                  
-                  <div className="framing-helper-text">
-                    Align document edges
-                  </div>
-                  
-                  <div className="dynamic-border-pulse"></div>
+                <div className="framing-helper-text">
+                  Align document edges
                 </div>
+                
+                <div className="dynamic-border-pulse"></div>
               </div>
-            )}
+            </div>
           </div>
 
           {/* Bottom Controls */}

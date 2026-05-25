@@ -327,41 +327,39 @@ export const QRScanView: React.FC<QRScanViewProps> = ({ onClose }) => {
             </div>
           )}
 
-          {/* Video element and absolute sweeping lasers */}
-          {!loading && !error && (
-            <div className="camera-video-wrapper">
-              <video 
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="camera-video-feed"
-              />
+          {/* Video element - always kept in DOM so videoRef is never null when stream arrives */}
+          <div className="camera-video-wrapper" style={{ display: loading || error ? 'none' : 'block' }}>
+            <video 
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="camera-video-feed"
+            />
+            
+            <div className="qr-scanning-bracket flex-center">
+              {/* Corner Brackets */}
+              <div className="qr-bracket tl"></div>
+              <div className="qr-bracket tr"></div>
+              <div className="qr-bracket bl"></div>
+              <div className="qr-bracket br"></div>
               
-              <div className="qr-scanning-bracket flex-center">
-                {/* Corner Brackets */}
-                <div className="qr-bracket tl"></div>
-                <div className="qr-bracket tr"></div>
-                <div className="qr-bracket bl"></div>
-                <div className="qr-bracket br"></div>
-                
-                {/* Sweeping Laser Line */}
-                {!scannedResult && <div className="sweeping-laser-line"></div>}
-                
-                {/* Visual scan status label when code is detected */}
-                {scannedResult && (
-                  <div className="scan-paused-label flex-center animate-fade-in">
-                    <Check size={18} />
-                    <span>Detected</span>
-                  </div>
-                )}
-              </div>
-
-              <p className="qr-helper-text">
-                {scannedResult ? 'Scan paused. View result below.' : 'Align QR code inside the bracket'}
-              </p>
+              {/* Sweeping Laser Line */}
+              {!scannedResult && <div className="sweeping-laser-line"></div>}
+              
+              {/* Visual scan status label when code is detected */}
+              {scannedResult && (
+                <div className="scan-paused-label flex-center animate-fade-in">
+                  <Check size={18} />
+                  <span>Detected</span>
+                </div>
+              )}
             </div>
-          )}
+
+            <p className="qr-helper-text">
+              {scannedResult ? 'Scan paused. View result below.' : 'Align QR code inside the bracket'}
+            </p>
+          </div>
         </div>
 
         {/* Footer controls */}
